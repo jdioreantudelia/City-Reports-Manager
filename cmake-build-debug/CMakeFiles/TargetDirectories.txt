@@ -1,3 +1,0 @@
-/mnt/c/Users/pc/CLionProjects/Proiect_SO_Jdioreantu_Delia/cmake-build-debug/CMakeFiles/phase1_c.dir
-/mnt/c/Users/pc/CLionProjects/Proiect_SO_Jdioreantu_Delia/cmake-build-debug/CMakeFiles/edit_cache.dir
-/mnt/c/Users/pc/CLionProjects/Proiect_SO_Jdioreantu_Delia/cmake-build-debug/CMakeFiles/rebuild_cache.dir
