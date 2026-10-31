@@ -17,7 +17,7 @@ void signal_handler(int sig) {
 
 int main() {
     int check=open(PID_FILE,O_RDONLY);
-    if ( check!=-1) {
+    if ( check!=-1) { // .monitor_pid exista deja
         char pid[10];
         int bytes=read(check, pid,sizeof(pid)-1);
         close(check);

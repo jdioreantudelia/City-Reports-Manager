@@ -98,6 +98,7 @@ void calculate_scores(char *districts[],int nr) {
     for (int i=0;i<nr;i++){
         char buffer[256];
         int bytes;
+
         while ((bytes=read(pfds[i][0],buffer,sizeof(buffer)-1))  >0) {
             buffer[bytes]='\0';
 
@@ -147,7 +148,8 @@ int main() {
     char command[50];
     while (1) {
         printf("city_hub> ");
-        fgets(command,sizeof(command),stdin);
+        if (fgets(command, sizeof(command), stdin) == NULL)
+            break;
         command[strcspn(command,"\n")]='\0';
 
         if (strlen(command)==0)//pt enter

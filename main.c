@@ -58,33 +58,58 @@ void create(const char *district) {
     else {
         symlink(path,link_name); //daca nu exista deloc,il creem
     }
-    //dangling link-daca s a sterg fisierul din path,symlinkul continue sa existe
+    //dangling link-daca s a sterg fisierul din path,symlinkul continua sa existe
 }
 
-void add_report(const char *district,const char *user) {
+int add_report(const char *district,const char *user) {
     REPORT r;
+    memset(&r, 0, sizeof(r));
     char path[PATH_SIZE];
+    char buf[256];
     int f;
 
-    printf("X: "); scanf("%f", &r.gps.latitude);
-    printf("Y: "); scanf("%f", &r.gps.longitude);
+    printf("X: ");
+    if (!fgets(buf, sizeof(buf), stdin) || sscanf(buf, "%f", &r.gps.latitude) != 1) {
+        fprintf(stderr, "Error: invalid X coordinate\n");
+        return 0;
+    }
+    printf("Y: ");
+    if (!fgets(buf, sizeof(buf), stdin) || sscanf(buf, "%f", &r.gps.longitude) != 1) {
+        fprintf(stderr, "Error: invalid Y coordinate\n");
+        return 0;
+    }
 
     printf("Category (road/lighting/flooding/other): ");
-    scanf("%s",r.category);
+    if (!fgets(buf, sizeof(buf), stdin) || sscanf(buf, "%29s", r.category) != 1) {
+        fprintf(stderr, "Error: invalid category\n");
+        return 0;
+    }
+    if (strcmp(r.category, "road") != 0 && strcmp(r.category, "lighting") != 0 &&
+        strcmp(r.category, "flooding") != 0 && strcmp(r.category, "other") != 0) {
+        fprintf(stderr, "Error: category must be road, lighting, flooding or other\n");
+        return 0;
+        }
 
     printf("Severity level (1/2/3): ");
-    scanf("%d",&r.severity);
+    if (!fgets(buf, sizeof(buf), stdin) || sscanf(buf, "%d", &r.severity) != 1 ||
+      r.severity < 1 || r.severity > 3) {
+        fprintf(stderr, "Error: severity must be 1, 2 or 3\n");
+        return 0;
+      }
 
-    getchar(); // Consumă newline-ul rămas în buffer pentru ca fgets să funcționeze
+
     printf("Description: ");
-    fgets(r.description, DESCR, stdin);
+    if (!fgets(r.description, DESCR, stdin)) {
+        fprintf(stderr, "Error: could not read description\n");
+        return 0;
+    }
     r.description[strcspn(r.description, "\n")] = 0;
 
     snprintf(path, sizeof(path), "%s/reports.dat", district);
     f=open(path,O_RDWR,0664);
     if (f == -1) {
         perror("Open error reports.dat");
-        return;
+        return 0;
     }
 
     struct stat st;
@@ -105,10 +130,12 @@ void add_report(const char *district,const char *user) {
     lseek(f,0,SEEK_END);
     if (write(f, &r, sizeof(REPORT)) == -1) {
         perror("Error saving report!\n");
-    } else {
-        printf("Raport saved with ID: %d\n", r.id);
+        close(f);
+        return 0;
     }
+    printf("Raport saved with ID: %d\n", r.id);
     close(f);
+    return 1;
 }
 
 void add_logged_district(const char *district,const char *user, const char *role,const char *action){
@@ -293,9 +320,11 @@ void remove_report(const char *district,int raport_id)
         write(f,&r,sizeof(REPORT));
     }
 
-    if (ftruncate(f,(total-1)*sizeof(REPORT))==-1)
-    {
+    if (ftruncate(f,(total-1)*sizeof(REPORT))==-1){
         perror("Eroare la stergere ultimul rand (cel dublificat)\n");
+    }
+    else {
+        printf("Raportul cu ID %d a fost sters cu succes!\n", raport_id);
     }
     close(f);
 }
@@ -331,6 +360,7 @@ int parse_condition(const char *input, char *field, char *op, char *value) {
     // copiem input-ul ca sa nu il modificam
     char copy[100];
     strncpy(copy, input, sizeof(copy)-1);
+    copy[sizeof(copy)-1] = '\0';
 
     // strtok sparge string-ul dupa ":"
     char *token = strtok(copy, ":");
@@ -401,7 +431,11 @@ void filter(const char *district,int argc, char *argv[]) {
 
         for (int i=7; i<argc;i++) {
             char field[50], op[10], value[50];
-            parse_condition(argv[i], field, op, value);
+            if (!parse_condition(argv[i], field, op, value)) {
+                fprintf(stderr, "Invalid condition: %s\n", argv[i]);
+                close(f);
+                return;
+            }
 
             if (match_condition(&r, field, op, value) ==0) {
                 match=0; // o conditie nu e indeplinita, ne oprim nu mai verificam celelalte
@@ -428,7 +462,23 @@ void filter(const char *district,int argc, char *argv[]) {
 }
 
 void remove_district(const char *district) {
+
     char link_name[LINK_SIZE];
+    char path[PATH_SIZE];
+    struct stat st;
+
+    // trebuie sa fie director,nu symlink
+    if (lstat(district, &st) == -1 || !S_ISDIR(st.st_mode)) {
+        fprintf(stderr, "Error: '%s' is not a district\n", district);
+        return;
+    }
+    // trebuie sa contina fisierele create de aplicatie
+    snprintf(path, sizeof(path), "%s/district.cfg", district);
+    if (stat(path, &st) == -1) {
+        fprintf(stderr, "Error: '%s' is not a district\n", district);
+        return;
+    }
+
     snprintf(link_name, sizeof(link_name),"active_reports-%s",district);
     unlink(link_name);
 
@@ -479,7 +529,20 @@ void notify_monitor(const char *district,const char *user,const char *role) {
     add_logged_district(district,user,role,text);
 }
 
-
+int valid_district_name(const char *name) {
+    int len=strlen(name);
+    if (len==0 || len>= NAME)
+        return 0;
+    if (name[0]== '.' || name[0]=='-')
+        return 0;
+    for (int i=0;i<len;i++) {
+        char c=name[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '_' || c == '-'))
+            return 0;
+    }
+    return 1;
+}
 
 
 int main(int argc,char *argv[]) {
@@ -494,7 +557,6 @@ int main(int argc,char *argv[]) {
     char *district=argv[6];
 
 
-    //create(district);
     if (strcmp(role, "manager")!=0 && strcmp(role,"inspector") != 0) {
         printf("Invalid arguments\n");
         return 1;
@@ -504,12 +566,18 @@ int main(int argc,char *argv[]) {
     snprintf(path_reports,sizeof(path_reports),"%s/reports.dat",district);
     snprintf(path_cfg,sizeof(path_cfg),"%s/district.cfg",district);
 
-    create(district);
+    if (!valid_district_name(district)) {
+        fprintf(stderr,"Error: Invalid district name\n");
+        return 1;
+    }
+
+    if (strcmp(command, "--remove_district") != 0)
+        create(district);
 
     if (strcmp(command,"--add")==0) {
         if (check_permissions(path_reports,role,'w')) {
-            add_report(district,user);
-            notify_monitor(district,user,role);
+            if (add_report(district, user))
+                notify_monitor(district,user,role);
         }
         else {
             fprintf(stderr,"Error: Current role doesn't have permission to write\n");

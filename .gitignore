@@ -1,0 +1,21 @@
+# Build files
+cmake-build-debug/
+cmake-build-release/
+
+# IDE
+.idea/
+
+# executabile
+city_manager
+city_hub
+monitor_reports
+scorer
+
+# runtime
+.monitor_pid
+active_reports-*
+
+# date de test (directoare de districte)
+Nord/
+Elisabetin/
+Complex/
